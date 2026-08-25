@@ -1,0 +1,22 @@
+# --- API ---
+fastapi
+uvicorn[standard]
+pydantic
+
+# --- ML ---
+pandas
+numpy
+scikit-learn
+joblib
+
+# --- config / http ---
+python-dotenv
+httpx
+
+# --- LLM: pick ONE provider SDK (the agent is provider-agnostic) ---
+# openai
+# anthropic
+# google-generativeai
+
+# --- dev ---
+pytest

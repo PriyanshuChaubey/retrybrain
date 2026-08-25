@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RetryBrain — Revenue Recovery</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f5f7fb; --card:#ffffff; --ink:#0b1221; --muted:#64708a; --line:#e6eaf2;
+    --brand:#3b5bfd; --brand-2:#0b1221; --good:#16a34a; --bad:#dc2626; --warn:#d97706;
+    --chip:#eef2ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(90deg,#0b1221,#1e2a55);color:#fff;padding:22px 28px;}
+  header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header p{margin:4px 0 0;color:#aeb8d6;font-size:13px}
+  .wrap{max-width:1120px;margin:0 auto;padding:22px 20px 60px}
+  .row{display:grid;gap:16px}
+  .kpis{grid-template-columns:repeat(4,1fr);margin-top:-38px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        box-shadow:0 1px 2px rgba(16,24,40,.04);padding:18px}
+  .kpi .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  .kpi .value{font-size:26px;font-weight:700;margin-top:6px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:4px}
+  .value.good{color:var(--good)} .value.brand{color:var(--brand)}
+  .grid2{grid-template-columns:1fr 1fr;margin-top:16px}
+  .grid-tbl{grid-template-columns:1.35fr .9fr;margin-top:16px}
+  h2{font-size:14px;margin:0 0 12px;letter-spacing:.3px}
+  .chartbox{position:relative;height:260px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f7f9ff}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.ok{background:#e7f6ec;color:var(--good)} .pill.no{background:#fdeaea;color:var(--bad)}
+  .tag{display:inline-block;padding:2px 8px;border-radius:6px;background:var(--chip);
+       color:var(--brand);font-size:11px;font-weight:600}
+  .scroll{max-height:420px;overflow:auto}
+  .exc{font-size:12.5px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fffdf7}
+  .exc b{color:var(--warn)}
+  .muted{color:var(--muted)}
+  .badge{font-size:11px;padding:3px 9px;border-radius:999px;background:#eef2ff;color:var(--brand);font-weight:700}
+  #banner{display:none;background:#fff4f4;border:1px solid #f6caca;color:#9b1c1c;
+          padding:12px 16px;border-radius:10px;margin-top:16px;font-size:13px}
+  code{background:#0b1221;color:#e6eaf2;padding:2px 6px;border-radius:6px;font-size:12px}
+  /* drawer */
+  #drawer{position:fixed;inset:0;background:rgba(11,18,33,.45);display:none;z-index:50}
+  #drawer .panel{position:absolute;right:0;top:0;bottom:0;width:min(520px,92vw);background:#fff;
+       padding:22px;overflow:auto;box-shadow:-8px 0 30px rgba(0,0,0,.15)}
+  #drawer h3{margin:0 0 2px} .close{float:right;cursor:pointer;color:var(--muted);font-size:20px;border:0;background:none}
+  .step{border-left:2px solid var(--brand);padding:6px 0 12px 14px;position:relative;margin-left:6px}
+  .step:before{content:"";position:absolute;left:-5px;top:8px;width:8px;height:8px;border-radius:50%;background:var(--brand)}
+  .step .s{font-weight:700;font-size:12.5px} .step .d{font-size:12px;color:var(--muted);word-break:break-word}
+  .step .t{font-size:11px;color:#9aa4bc}
+</style>
+</head>
+<body>
+<header>
+  <h1>RetryBrain <span class="badge" id="modelBadge">—</span></h1>
+  <p>Detect revenue at risk → diagnose the root cause → decide the intervention → run a bounded recovery workflow → measure the money recovered. <b>Track 03 · Razorpay Buildathon</b></p>
+</header>
+
+<div class="wrap">
+  <div id="banner"></div>
+
+  <div class="row kpis">
+    <div class="card kpi"><div class="label">Money recovered</div><div class="value good" id="kpiMoney">—</div><div class="sub" id="kpiMoneySub">of total at risk</div></div>
+    <div class="card kpi"><div class="label">Recovery rate</div><div class="value brand" id="kpiRate">—</div><div class="sub" id="kpiRateSub">payments recovered</div></div>
+    <div class="card kpi"><div class="label">Uplift vs naive baseline</div><div class="value" id="kpiUplift">—</div><div class="sub" id="kpiUpliftSub">extra money recovered</div></div>
+    <div class="card kpi"><div class="label">Exceptions (honest)</div><div class="value" id="kpiExc">—</div><div class="sub">not recovered — see list</div></div>
+  </div>
+
+  <div class="row grid2">
+    <div class="card"><h2>RetryBrain vs naive baseline</h2><div class="chartbox"><canvas id="chartVs"></canvas></div></div>
+    <div class="card"><h2>Recovered by failure cause (RetryBrain vs baseline)</h2><div class="chartbox"><canvas id="chartCause"></canvas></div></div>
+  </div>
+
+  <div class="row grid-tbl">
+    <div class="card">
+      <h2>Recovery ledger <span class="muted" style="font-weight:400">— click a row for its full audit trail</span></h2>
+      <div class="scroll">
+        <table><thead><tr>
+          <th>Payment</th><th>Cause</th><th>Amount</th><th>Action</th><th>P(retry)</th><th>Result</th>
+        </tr></thead><tbody id="ledger"></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Exceptions — what did <i>not</i> recover</h2>
+      <div class="scroll" id="excList"></div>
+    </div>
+  </div>
+</div>
+
+<div id="drawer" onclick="if(event.target===this)this.style.display='none'">
+  <div class="panel">
+    <button class="close" onclick="document.getElementById('drawer').style.display='none'">×</button>
+    <h3 id="dTitle">Audit trail</h3>
+    <div class="muted" id="dSub" style="font-size:12.5px;margin-bottom:14px"></div>
+    <div id="dSteps"></div>
+  </div>
+</div>
+
+<script>
+const API = ""; // same origin (served by FastAPI at /)
+const inr = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n||0);
+const pct = x => (100*(x||0)).toFixed(1) + '%';
+
+async function getJSON(path){
+  const r = await fetch(API+path);
+  if(!r.ok) throw new Error(path+' -> '+r.status);
+  return r.json();
+}
+function banner(msg){ const b=document.getElementById('banner'); b.style.display='block'; b.innerHTML=msg; }
+
+async function main(){
+  let m, results;
+  try{
+    [m, results] = await Promise.all([getJSON('/metrics'), getJSON('/results')]);
+  }catch(e){
+    banner("Couldn't reach the RetryBrain API ("+e.message+"). Start it with "+
+           "<code>uvicorn backend.main:app --port 8000</code> then open "+
+           "<code>http://127.0.0.1:8000/</code>.");
+    return;
+  }
+
+  document.getElementById('modelBadge').textContent = (m.model==='trained'?'ML model':'heuristic');
+  document.getElementById('kpiMoney').textContent = inr(m.rupees_recovered);
+  document.getElementById('kpiMoneySub').textContent = 'of '+inr(m.rupees_at_risk)+' at risk';
+  document.getElementById('kpiRate').textContent = pct(m.recovery_rate);
+  document.getElementById('kpiRateSub').textContent = m.recovered_count+' / '+m.total_payments+' payments';
+  document.getElementById('kpiUplift').textContent = '+'+inr(m.uplift.rupees);
+  document.getElementById('kpiUplift').classList.add('good');
+  document.getElementById('kpiUpliftSub').textContent =
+     '+'+m.uplift.extra_payments_recovered+' payments · +'+m.uplift.recovery_rate_points+' pts';
+  document.getElementById('kpiExc').textContent = m.exception_count;
+
+  // Chart 1: RetryBrain vs baseline (recovery rate %)
+  new Chart(document.getElementById('chartVs'), {
+    type:'bar',
+    data:{ labels:['Recovery rate','Money recovered (₹000)'],
+      datasets:[
+        {label:'RetryBrain', backgroundColor:'#3b5bfd',
+         data:[+(100*m.recovery_rate).toFixed(1), +(m.rupees_recovered/1000).toFixed(1)]},
+        {label:'Naive baseline', backgroundColor:'#c7d0ea',
+         data:[+(100*m.baseline.recovery_rate).toFixed(1), +(m.baseline.rupees_recovered/1000).toFixed(1)]}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}
+  });
+
+  // Chart 2: recovered by cause (RetryBrain vs baseline)
+  const codes = Object.keys(m.by_failure_code);
+  new Chart(document.getElementById('chartCause'), {
+    type:'bar',
+    data:{ labels:codes,
+      datasets:[
+        {label:'RetryBrain recovered', backgroundColor:'#16a34a',
+         data:codes.map(c=>m.by_failure_code[c].recovered)},
+        {label:'Baseline recovered', backgroundColor:'#c7d0ea',
+         data:codes.map(c=>m.by_failure_code[c].baseline_recovered)}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{maxRotation:40,minRotation:20}},y:{beginAtZero:true}}}
+  });
+
+  // Ledger table
+  const tb = document.getElementById('ledger');
+  tb.innerHTML = results.map(r=>`
+    <tr onclick="showAudit('${r.payment_id}')">
+      <td>${r.payment_id}</td>
+      <td><span class="tag">${r.failure_code}</span></td>
+      <td>${inr(r.amount)}</td>
+      <td>${r.final_action}${r.dnd?' · <span class="muted">DND</span>':''}</td>
+      <td>${(r.p_success??0).toFixed(2)}</td>
+      <td>${r.recovered?'<span class="pill ok">recovered</span>':'<span class="pill no">no</span>'}</td>
+    </tr>`).join('');
+
+  // Exceptions
+  document.getElementById('excList').innerHTML = m.exceptions.length
+    ? m.exceptions.map(e=>`<div class="exc"><b>${e.failure_code}</b> · ${e.payment_id} · ${inr(e.amount)}
+        ${e.dnd?'· <span class="muted">DND</span>':''}<br><span class="muted">${e.reason}</span></div>`).join('')
+    : '<div class="muted">No exceptions — everything recovered.</div>';
+}
+
+async function showAudit(pid){
+  const d = document.getElementById('drawer');
+  document.getElementById('dTitle').textContent = 'Audit trail · '+pid;
+  document.getElementById('dSub').textContent = 'Every decision and action, in order — this is the verifiable record.';
+  const box = document.getElementById('dSteps'); box.innerHTML = 'Loading…'; d.style.display='block';
+  try{
+    const trail = await getJSON('/audit/'+pid);
+    box.innerHTML = trail.map(e=>`<div class="step">
+        <div class="s">${e.step}</div>
+        <div class="d">${JSON.stringify(e.detail)}</div>
+        <div class="t">${e.ts||''}</div></div>`).join('');
+  }catch(err){ box.innerHTML = '<span class="muted">No audit trail found.</span>'; }
+}
+window.showAudit = showAudit;
+main();
+</script>
+</body>
+</html>

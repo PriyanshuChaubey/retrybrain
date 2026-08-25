@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+node_modules/
+dist/
+build/
+
+# Generated data (regenerate with: python data/generate.py)
+data/history.csv
+data/batch.json
+
+# Generated run snapshot (regenerate with: python -m backend.runner)
+data/last_run.json
+
+# Trained model artifact (regenerate with: python backend/model/train.py)
+backend/model/retry_model.pkl
+
+*.sqlite3
+.DS_Store
