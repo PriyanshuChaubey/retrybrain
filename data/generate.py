@@ -24,6 +24,14 @@ import argparse
 from datetime import datetime, timedelta
 
 random.seed(42)  # reproducible batches - good for demos and tests
+
+# Fixed reference "now" so the dataset is FULLY reproducible. With only random.seed()
+# set, the timestamps below still read the wall clock, so hour_of_day (and therefore
+# some labels) drifted from run to run - the same repo produced a different ROC-AUC on
+# a different day. Pinning the clock makes generate.py emit byte-identical history.csv
+# and batch.json on any machine, any day, so every number in the README stays true.
+REFERENCE_NOW = datetime(2026, 1, 15, 12, 0, 0)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---- Domain constants -------------------------------------------------------
@@ -69,7 +77,7 @@ def recovery_probability(failure_code, hour, attempt_number,
     if failure_code == "insufficient_funds":
         if 6 <= hour <= 11:          # people top up in the morning
             p += 0.25
-        if datetime.now().day <= 3:  # crude "salary window" proxy
+        if REFERENCE_NOW.day <= 3:   # crude "salary window" proxy (fixed for reproducibility)
             p += 0.10
     elif failure_code == "bank_downtime":
         p = 0.85 if not in_downtime_window else 0.10  # recovers once bank is back
@@ -127,7 +135,7 @@ def _make_event(customer, when, attempt_number):
 def generate_history(customers, n_rows):
     """Labeled rows for TRAINING (includes retry_succeeded)."""
     rows = []
-    start = datetime.now() - timedelta(days=30)
+    start = REFERENCE_NOW - timedelta(days=30)
     for _ in range(n_rows):
         cust = random.choice(customers)
         when = start + timedelta(minutes=random.randint(0, 30 * 24 * 60))
@@ -141,10 +149,14 @@ def generate_history(customers, n_rows):
 
 
 def generate_batch(customers, n):
-    """A fresh batch of NEW failed payments for the agent to work (no label)."""
-    now = datetime.now()
+    """A fresh batch of NEW failed payments for the agent to work (no label).
+
+    Failures are spread across the last 24h (not clustered at one instant), so the
+    batch spans every hour of the day - no single failure hour can drive the result -
+    and it is reproducible via REFERENCE_NOW + the seed."""
+    now = REFERENCE_NOW
     return [_make_event(random.choice(customers),
-                        now - timedelta(minutes=random.randint(0, 120)),
+                        now - timedelta(minutes=random.randint(0, 24 * 60)),
                         attempt_number=1) for _ in range(n)]
 
 

@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 import joblib
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingClassifier
@@ -46,7 +46,7 @@ def load():
 def build_pipeline(classifier):
     pre = ColumnTransformer([
         ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL),
-        ("num", "passthrough", NUMERIC),
+        ("num", StandardScaler(), NUMERIC),   # scale numerics so logreg converges (amount ~5000 vs rate ~1)
     ])
     return Pipeline([("pre", pre), ("clf", classifier)])
 
@@ -59,7 +59,7 @@ def main():
     )
 
     candidates = {
-        "logreg": LogisticRegression(max_iter=1000),
+        "logreg": LogisticRegression(max_iter=2000),
         "gboost": GradientBoostingClassifier(random_state=42),
     }
 

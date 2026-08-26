@@ -80,6 +80,19 @@
     <div class="card"><h2>Recovered by failure cause (RetryBrain vs baseline)</h2><div class="chartbox"><canvas id="chartCause"></canvas></div></div>
   </div>
 
+  <div class="row grid2" id="econRow" style="display:none">
+    <div class="card">
+      <h2>Recovery economics <span class="muted" style="font-weight:400">— retries are free; only customer outreach is budgeted</span></h2>
+      <div class="value good" id="econRoi" style="font-size:30px">—</div>
+      <div class="sub" id="econRoiSub">recovered per ₹1 spent</div>
+      <div id="econStats" style="margin-top:14px;font-size:13px;line-height:1.7"></div>
+    </div>
+    <div class="card">
+      <h2>Efficient frontier <span class="muted" style="font-weight:400">— expected ₹ recovered as the outreach budget grows</span></h2>
+      <div class="chartbox"><canvas id="chartFrontier"></canvas></div>
+    </div>
+  </div>
+
   <div class="row grid-tbl">
     <div class="card">
       <h2>Recovery ledger <span class="muted" style="font-weight:400">— click a row for its full audit trail</span></h2>
@@ -108,6 +121,7 @@
 <script>
 const API = ""; // same origin (served by FastAPI at /)
 const inr = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n||0);
+const inr2 = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
 const pct = x => (100*(x||0)).toFixed(1) + '%';
 
 async function getJSON(path){
@@ -167,6 +181,9 @@ async function main(){
       scales:{x:{ticks:{maxRotation:40,minRotation:20}},y:{beginAtZero:true}}}
   });
 
+  // Economics: cost/ROI + efficient frontier (only if the snapshot carries it)
+  renderEconomics(m);
+
   // Ledger table
   const tb = document.getElementById('ledger');
   tb.innerHTML = results.map(r=>`
@@ -184,6 +201,59 @@ async function main(){
     ? m.exceptions.map(e=>`<div class="exc"><b>${e.failure_code}</b> · ${e.payment_id} · ${inr(e.amount)}
         ${e.dnd?'· <span class="muted">DND</span>':''}<br><span class="muted">${e.reason}</span></div>`).join('')
     : '<div class="muted">No exceptions — everything recovered.</div>';
+}
+
+function renderEconomics(m){
+  const e = m.economics;
+  if(!e || !e.frontier || !e.frontier.length){ return; }   // older snapshot: skip gracefully
+  document.getElementById('econRow').style.display = 'grid';
+
+  const r = e.measured_run, eb = e.efficient_budget, mb = eb.measured || {};
+  document.getElementById('econRoi').textContent = '₹'+ (r.roi||0).toLocaleString('en-IN');
+  document.getElementById('econRoiSub').textContent =
+     'recovered per ₹1 spent  ·  '+inr(r.rupees_recovered)+' recovered for '+inr2(r.total_cost)+' total spend';
+
+  // measured comparison: targeted budget vs messaging everyone
+  const pctMoney = eb.pct_of_measured_recovery!=null ? eb.pct_of_measured_recovery
+                   : (mb.rupees_recovered && r.rupees_recovered ? (100*mb.rupees_recovered/r.rupees_recovered) : null);
+  const pctSpend = eb.pct_of_measured_outreach!=null ? eb.pct_of_measured_outreach
+                   : (mb.outreach_cost!=null && r.outreach_spent ? (100*mb.outreach_cost/r.outreach_spent) : null);
+  const fl = e.measured_floor, lift = e.outreach_lift || {};
+  document.getElementById('econStats').innerHTML = `
+    ${fl ? `<div>Free retries alone: <b>${inr(fl.rupees_recovered)}</b> (${fl.recovered_count} payments) at <b>₹0</b> outreach.</div>
+    <div style="margin-top:6px">+ compliant outreach: <b>${inr2(lift.outreach_cost)}</b> on ${r.contacts} messages lifts recovery to
+         <b>${inr(r.rupees_recovered)}</b> — <b>+${inr(lift.rupees)}</b> (${lift.payments} more payments),
+         ≈ <b>₹${(lift.roi_per_rupee||0).toLocaleString('en-IN')}</b> recovered per ₹1 of <i>outreach</i>.</div>`:''}
+    ${pctMoney!=null ? `<div style="margin-top:6px" class="muted">Targeted to a <b>${inr2(eb.budget)}</b> outreach budget, the
+         measured run still recovers <b>${pctMoney.toFixed(0)}%</b> of the fully-funded revenue
+         ${pctSpend!=null?`for just <b>${pctSpend.toFixed(0)}%</b> of the outreach spend`:''}.</div>`:''}
+    <div class="muted" style="margin-top:8px;font-size:12px">
+      The allocator funds the highest expected-ROI failures first, so the expected-recovery
+      curve rises steeply then flattens — spend the last rupees only where they still pay off.</div>`;
+
+  // Efficient-frontier line: share of EXPECTED recoverable revenue captured vs outreach budget
+  const fr = e.frontier;
+  const maxExp = fr[fr.length-1].expected_recovered || 1;
+  const effIdx = fr.reduce((best,pt,i)=> Math.abs(pt.budget-eb.budget) < Math.abs(fr[best].budget-eb.budget) ? i : best, 0);
+  new Chart(document.getElementById('chartFrontier'), {
+    type:'line',
+    data:{ labels: fr.map(p=>'₹'+p.budget.toFixed(1)),
+      datasets:[{
+        label:'% of expected recoverable revenue', data: fr.map(p=>+(100*p.expected_recovered/maxExp).toFixed(1)),
+        borderColor:'#3b5bfd', backgroundColor:'rgba(59,91,253,.12)', fill:true, tension:.25,
+        pointRadius: fr.map((_,i)=> i===effIdx?5:2),
+        pointBackgroundColor: fr.map((_,i)=> i===effIdx?'#16a34a':'#3b5bfd')
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{
+          title:(t)=>'Outreach budget '+t[0].label,
+          label:(t)=>t.parsed.y.toFixed(1)+'% of expected recoverable revenue  ·  '
+                     +fr[t.dataIndex].funded_contacts+' contacts funded'}}},
+      scales:{y:{suggestedMax:100,title:{display:true,text:'% of expected recoverable revenue'}},
+              x:{title:{display:true,text:'outreach budget (green ≈ 95% of expected — the efficient point)'},
+                 ticks:{maxRotation:40,minRotation:20}}}}
+  });
 }
 
 async function showAudit(pid){
