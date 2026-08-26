@@ -5,9 +5,11 @@
 
 RetryBrain **detects** revenue at risk (failed payments), **diagnoses** the root cause, **decides** the right intervention using an ML retry-success score plus an explicit policy, and **executes a bounded recovery workflow** — smart-timed retries and compliant, escalating dunning — governed by **stopping rules** and recorded in a full **audit trail**. It treats recovery as a **budget-constrained ROI problem** (retries are free; customer outreach is rationed to where it pays off) and reports **money recovered across a 50+ record batch measured against a naive baseline**, with an **honest list of what it could not recover** — a lift that holds across five random seeds, not one lucky batch.
 
-![RetryBrain dashboard — money recovered, RetryBrain vs. baseline, recovery by failure cause, the recovery ledger, and a click-through audit trail](assets/dashboard.png)
+![RetryBrain dashboard, top — money recovered vs. total at risk, recovery rate, uplift vs. the naive baseline, the honest exception count, and the RetryBrain-vs-baseline and recovery-by-cause charts](assets/dashboard.png)
 
-*The live dashboard — money recovered vs. total at risk, RetryBrain vs. the naive baseline, recovery by failure cause, the full recovery ledger, and a click-through audit trail for every payment.*
+![RetryBrain dashboard, bottom — the recovery-economics card, the efficient-frontier curve, the click-through recovery ledger, and the honest "what did not recover" exception list](assets/dashboard-2.png)
+
+*The live dashboard, top to bottom: the headline KPIs (money recovered vs. total at risk, recovery rate, uplift, exceptions) and the two comparison charts, then the recovery-economics card, the efficient-frontier curve, the click-through recovery ledger, and the honest "what did not recover" list.*
 
 ## Measured results
 
